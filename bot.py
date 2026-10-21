@@ -1,25 +1,40 @@
 import os
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+import threading
+from flask import Flask
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-TOKEN = os.getenv("BOT_TOKEN")
+# --- FIX PER RENDER: apre una porta finta ---
+app = Flask(__name__)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Ciao! Sono online! ✅")
+@app.route('/')
+def home():
+    return "Bot is alive!"
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Bot attivo 24/7 🚀")
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+threading.Thread(target=run_web, daemon=True).start()
+# --- FINE FIX ---
+
+# --- IL TUO BOT ---
+TOKEN = os.environ.get('TELEGRAM_API_KEY')
+
+async def start(update, context):
+    await update.message.reply_text("Ciao! Bot online su Render! 🚀")
+
+async def echo(update, context):
+    await update.message.reply_text(f"Hai scritto: {update.message.text}")
 
 def main():
-    if not TOKEN:
-        print("ERRORE: BOT_TOKEN mancante!")
-        return
     print("Avvio bot...")
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    print("Bot avviato!")
-    app.run_polling()
+    application = Application.builder().token(TOKEN).build()
+    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+    
+    print("Bot avviato! In ascolto...")
+    application.run_polling()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
