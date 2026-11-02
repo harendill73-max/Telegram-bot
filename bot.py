@@ -1,4 +1,4 @@
-import os, threading, random, time
+import os, threading, random, time, re
 import urllib.request
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -10,7 +10,7 @@ GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Nunzio V6.2 FIX - SEMPRE SVEGLIO"
+def home(): return "Nunzio V7 CERVELLONE"
 
 games = {}
 
@@ -20,7 +20,6 @@ def anti_sleep():
         time.sleep(600)
         try:
             urllib.request.urlopen(url, timeout=10).read()
-            print("[ANTI-SLEEP] Ping ok")
         except: pass
 
 PAC_MAZE = ["111111111","100000001","101010101","100000001","100000001","100000001","101010101","100000001","111111111"]
@@ -57,8 +56,10 @@ def render_tetris(g):
         for x in range(10): out+= tmp[y][x] if tmp[y][x]!=0 else "⬛"
         out+="\n"
     return out
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Nunzio V6.2 sempre sveglio! /snake /pacman /tetris")
+    await update.message.reply_text("Nunzio V7 🧠 CERVELLONE!\n/snake /pacman /tetris\nE poi chiedimi tabelline, conti, compiti!")
+
 async def snake_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id=update.effective_chat.id
     snake=[(3,3),(2,3),(1,3)]; food=(random.randint(0,7),random.randint(0,7))
@@ -68,8 +69,7 @@ async def snake_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def pacman_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id=update.effective_chat.id
     dots=[(x,y) for y in range(9) for x in range(9) if PAC_MAZE[y][x]=="0"]
-    pac=(4,4); ghost=(1,1)
-    dots=[d for d in dots if d!=pac and d!=ghost]
+    pac=(4,4); ghost=(1,1); dots=[d for d in dots if d!=pac and d!=ghost]
     games[chat_id]={"type":"pacman","pac":pac,"ghost":ghost,"dots":dots,"score":0}
     kb=[[InlineKeyboardButton("⬆️",callback_data="pac_up")],[InlineKeyboardButton("⬅️",callback_data="pac_left"),InlineKeyboardButton("⬇️",callback_data="pac_down"),InlineKeyboardButton("➡️",callback_data="pac_right")]]
     await update.message.reply_text(f"🟡 PACMAN Score:0\n{render_pacman(games[chat_id])}",reply_markup=InlineKeyboardMarkup(kb))
@@ -97,7 +97,7 @@ async def move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (nd[0]*-1, nd[1]*-1)!=g["dir"]: g["dir"]=nd
         nh=(g["snake"][0][0]+g["dir"][0], g["snake"][0][1]+g["dir"][1])
         if not (0<=nh[0]<8 and 0<=nh[1]<8) or nh in g["snake"]:
-            await q.edit_message_text("💥 Snake Game Over! /snake"); del games[chat_id]; return
+            await q.edit_message_text("💥 Game Over! /snake"); del games[chat_id]; return
         g["snake"]=[nh]+g["snake"]
         if nh==g["food"]: g["food"]=(random.randint(0,7),random.randint(0,7))
         else: g["snake"].pop()
@@ -146,18 +146,61 @@ async def move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await q.edit_message_text(f"🧱 Game Over! Score:{g['score']} /tetris"); del games[chat_id]; return
         kb=[[InlineKeyboardButton("🔄 Ruota",callback_data="tet_rot"),InlineKeyboardButton("⬇️ Giù",callback_data="tet_down")],[InlineKeyboardButton("⬅️",callback_data="tet_left"),InlineKeyboardButton("➡️",callback_data="tet_right")]]
         await q.edit_message_text(f"🧱 TETRIS Score:{g['score']}\n{render_tetris(g)}",reply_markup=InlineKeyboardMarkup(kb))
+
+# === CHAT CERVELLONE FIX ===
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    # 1. Se è un conto matematico, fallo da solo - 100% sicuro!
+    math_match = re.search(r'(\d+\s*[\+\-\*\/xX]\s*\d+)', text.replace('=', ''))
+    if math_match or any(c in text for c in ['+', '*', 'x']) and any(ch.isdigit() for ch in text):
+        try:
+            expr = text.replace('=', '').replace('x','*').replace('X','*').replace('×','*').replace('÷','/').strip()
+            # prendi solo numeri e operatori
+            clean = re.sub(r'[^0-9\+\-\*\/\(\)\.\s]', '', expr)
+            if clean:
+                result = eval(clean)
+                await update.message.reply_text(f"🧠 {text} = {result} ✅\nBravo! Vuoi un'altra tabellina?")
+                return
+        except: pass
+    
+    # 2. Se chiede tabelline
+    if "tabell" in text.lower():
+        tab = "📚 TABELLINA DEL 3:\n"
+        for i in range(1,11): tab+=f"{3} x {i} = {3*i}\n"
+        tab+="\nQuale altra vuoi? Dimmi 4, 5, 6..."
+        await update.message.reply_text(tab)
+        return
+
+    # 3. Altrimenti chiedi a Groq con FIX anti-messaggio vuoto
     try:
-        resp=client.chat.completions.create(model="openai/gpt-oss-20b",messages=[{"role":"system","content":"Sei Nunzio, bot pugliese simpatico."},{"role":"user","content":update.message.text}],max_tokens=300)
-        await update.message.reply_text(resp.choices[0].message.content)
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role":"system","content":"Sei Nunzio, bagnino pugliese super simpatico e bravissimo in matematica e tabelline. Rispondi sempre in italiano, breve, divertente, e se è un conto dai subito il risultato. Mai rispondere vuoto."},
+                {"role":"user","content": text}
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        content = resp.choices[0].message.content
+        # FIX: se Groq risponde vuoto, non mandare messaggio vuoto!
+        if not content or not content.strip():
+            content = f"🤔 Non ho capito '{text}' ma so che 2+23=25 e 3*2=6! Riprova!"
+        
+        await update.message.reply_text(content.strip()[:4000])
+
     except Exception as e:
-        await update.message.reply_text(f"Errore: {e}")
+        print(f"Errore Groq: {e}")
+        # Fallback finale - mai dare errore vuoto
+        await update.message.reply_text(f"Ops scusa, ho avuto un attimo di confusione! Ma so fare i conti: 2+23=25 e 3*2=6 😎 Riprova!")
+
 def run_flask():
     app.run(host="0.0.0.0",port=int(os.environ.get("PORT",10000)))
+
 if __name__=="__main__":
     threading.Thread(target=run_flask,daemon=True).start()
     threading.Thread(target=anti_sleep,daemon=True).start()
-    print("Bot V6.2 FIX partito!")
+    print("Bot V7 CERVELLONE partito!")
     b=ApplicationBuilder().token(BOT_TOKEN).build()
     b.add_handler(CommandHandler("start",start))
     b.add_handler(CommandHandler("snake",snake_cmd))
