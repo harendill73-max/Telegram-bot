@@ -1,4 +1,5 @@
-import os, threading, random, time, requests
+import os, threading, random, time
+import urllib.request
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -9,7 +10,7 @@ GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Nunzio V6.1 FIX"
+def home(): return "Nunzio V6.2 FIX - SEMPRE SVEGLIO"
 
 games = {}
 
@@ -18,7 +19,7 @@ def anti_sleep():
     while True:
         time.sleep(600)
         try:
-            requests.get(url, timeout=10)
+            urllib.request.urlopen(url, timeout=10).read()
             print("[ANTI-SLEEP] Ping ok")
         except: pass
 
@@ -35,7 +36,6 @@ def render_snake(snake, food, size=8):
             else: b+="⬛"
         b+="\n"
     return b
-
 def render_pacman(g):
     s=""
     for y in range(9):
@@ -47,7 +47,6 @@ def render_pacman(g):
             else: s+="⬜"
         s+="\n"
     return s
-
 def render_tetris(g):
     tmp = [row[:] for row in g["board"]]
     for dx,dy in g["piece"]:
@@ -58,17 +57,14 @@ def render_tetris(g):
         for x in range(10): out+= tmp[y][x] if tmp[y][x]!=0 else "⬛"
         out+="\n"
     return out
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Nunzio V6.1 sempre sveglio! /snake /pacman /tetris")
-
+    await update.message.reply_text("Nunzio V6.2 sempre sveglio! /snake /pacman /tetris")
 async def snake_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id=update.effective_chat.id
     snake=[(3,3),(2,3),(1,3)]; food=(random.randint(0,7),random.randint(0,7))
     games[chat_id]={"type":"snake","snake":snake,"food":food,"dir":(1,0)}
     kb=[[InlineKeyboardButton("⬆️",callback_data="snake_up")],[InlineKeyboardButton("⬅️",callback_data="snake_left"),InlineKeyboardButton("⬇️",callback_data="snake_down"),InlineKeyboardButton("➡️",callback_data="snake_right")]]
     await update.message.reply_text(f"🐍 SNAKE\n{render_snake(snake,food)}",reply_markup=InlineKeyboardMarkup(kb))
-
 async def pacman_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id=update.effective_chat.id
     dots=[(x,y) for y in range(9) for x in range(9) if PAC_MAZE[y][x]=="0"]
@@ -77,24 +73,19 @@ async def pacman_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     games[chat_id]={"type":"pacman","pac":pac,"ghost":ghost,"dots":dots,"score":0}
     kb=[[InlineKeyboardButton("⬆️",callback_data="pac_up")],[InlineKeyboardButton("⬅️",callback_data="pac_left"),InlineKeyboardButton("⬇️",callback_data="pac_down"),InlineKeyboardButton("➡️",callback_data="pac_right")]]
     await update.message.reply_text(f"🟡 PACMAN Score:0\n{render_pacman(games[chat_id])}",reply_markup=InlineKeyboardMarkup(kb))
-
 async def tetris_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id=update.effective_chat.id
     board=[[0]*10 for _ in range(10)]
     shape_color = random.choice(list(TETROS.values()))
-    shape = shape_color[0]
-    color = shape_color[1]
-    games[chat_id]={"type":"tetris","board":board,"piece":shape[:],"color":color,"x":3,"y":0,"score":0}
+    games[chat_id]={"type":"tetris","board":board,"piece":shape_color[0][:],"color":shape_color[1],"x":3,"y":0,"score":0}
     kb=[[InlineKeyboardButton("🔄 Ruota",callback_data="tet_rot"),InlineKeyboardButton("⬇️ Giù",callback_data="tet_down")],[InlineKeyboardButton("⬅️",callback_data="tet_left"),InlineKeyboardButton("➡️",callback_data="tet_right")]]
     await update.message.reply_text(f"🧱 TETRIS Score:0\n{render_tetris(games[chat_id])}",reply_markup=InlineKeyboardMarkup(kb))
-
 def can_move_tetris(g, nx, ny, piece):
     for dx,dy in piece:
         x=nx+dx; y=ny+dy
         if not (0<=x<10 and 0<=y<10): return False
         if g["board"][y][x]!=0: return False
     return True
-
 async def move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q=update.callback_query; await q.answer()
     chat_id=q.message.chat_id
@@ -155,21 +146,18 @@ async def move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await q.edit_message_text(f"🧱 Game Over! Score:{g['score']} /tetris"); del games[chat_id]; return
         kb=[[InlineKeyboardButton("🔄 Ruota",callback_data="tet_rot"),InlineKeyboardButton("⬇️ Giù",callback_data="tet_down")],[InlineKeyboardButton("⬅️",callback_data="tet_left"),InlineKeyboardButton("➡️",callback_data="tet_right")]]
         await q.edit_message_text(f"🧱 TETRIS Score:{g['score']}\n{render_tetris(g)}",reply_markup=InlineKeyboardMarkup(kb))
-
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         resp=client.chat.completions.create(model="openai/gpt-oss-20b",messages=[{"role":"system","content":"Sei Nunzio, bot pugliese simpatico."},{"role":"user","content":update.message.text}],max_tokens=300)
         await update.message.reply_text(resp.choices[0].message.content)
     except Exception as e:
         await update.message.reply_text(f"Errore: {e}")
-
 def run_flask():
     app.run(host="0.0.0.0",port=int(os.environ.get("PORT",10000)))
-
 if __name__=="__main__":
     threading.Thread(target=run_flask,daemon=True).start()
     threading.Thread(target=anti_sleep,daemon=True).start()
-    print("Bot V6.1 FIX partito!")
+    print("Bot V6.2 FIX partito!")
     b=ApplicationBuilder().token(BOT_TOKEN).build()
     b.add_handler(CommandHandler("start",start))
     b.add_handler(CommandHandler("snake",snake_cmd))
