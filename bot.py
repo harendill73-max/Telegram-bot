@@ -1,75 +1,126 @@
 import os
 import threading
+import random
 from flask import Flask
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from groq import Groq
 
-# --- FIX PER RENDER (server finto) ---
-flask_app = Flask(__name__)
-@flask_app.route('/')
+# --- CONFIG ---
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+GROQ_KEY = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+
+app = Flask(__name__)
+@app.route('/')
 def home():
-    return "Nunzio bot is online!"
+    return "Nunzio_bot is Live!"
 
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    flask_app.run(host="0.0.0.0", port=port)
+# --- MEMORIA SNAKE ---
+games = {}
 
-threading.Thread(target=run_web, daemon=True).start()
-# --- FINE FIX ---
+def render_board(snake, food, size=8):
+    board = ""
+    for y in range(size):
+        for x in range(size):
+            if (x,y) == food:
+                board += "🍎"
+            elif (x,y) in snake:
+                board += "🟩" if (x,y) == snake[0] else "🟢"
+            else:
+                board += "⬛"
+        board += "\n"
+    return board
 
-TOKEN = os.getenv("BOT_TOKEN")
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-ADMIN_USERNAME = "hadner"
-ai_bloccata = False
-
+# --- COMANDI ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Ciao! Sono Nunzio_bot 🤖\nSei su @Nunzio bot pugliese!")
+    await update.message.reply_text("Ciao! Sono Nunzio_bot 🤖\nSei su @Nunzio bot pugliese!\n\nComandi:\n/start - saluto\n/snake - gioca a Snake 🐍\nScrivimi qualsiasi cosa!")
 
-async def stop_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global ai_bloccata
-    user = update.effective_user.username
-    if user != ADMIN_USERNAME:
-        await update.message.reply_text("⛔ Solo @hadner può bloccare l'AI!")
+async def snake_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    snake = [(3,3), (2,3), (1,3)]
+    food = (random.randint(0,7), random.randint(0,7))
+    games[chat_id] = {"snake": snake, "food": food, "dir": (1,0), "size": 8}
+    
+    keyboard = [
+        [InlineKeyboardButton("⬆️", callback_data="up")],
+        [InlineKeyboardButton("⬅️", callback_data="left"), InlineKeyboardButton("⬇️", callback_data="down"), InlineKeyboardButton("➡️", callback_data="right")]
+    ]
+    board = render_board(snake, food)
+    await update.message.reply_text(f"🐍 Snake - usa le frecce!\n\n{board}", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    chat_id = query.message.chat_id
+    if chat_id not in games:
         return
-    ai_bloccata = True
-    await update.message.reply_text("🔴 AI BLOCCATA da @hadner!\nOra Nunzio non risponde. Tu leggi i messaggi e rispondi tu a mano.\nScrivi /startai per sbloccare.")
+    game = games[chat_id]
+    dirs = {"up": (0,-1), "down": (0,1), "left": (-1,0), "right": (1,0)}
+    if query.data in dirs:
+        # evita di tornare indietro
+        nd = dirs[query.data]
+        if (nd[0] * -1, nd[1] * -1) != game["dir"]:
+            game["dir"] = nd
+        
+        head = game["snake"][0]
+        new_head = (head[0] + game["dir"][0], head[1] + game["dir"][1])
+        
+        # check muri
+        if not (0 <= new_head[0] < game["size"] and 0 <= new_head[1] < game["size"]):
+            await query.edit_message_text("💥 Game Over! Hai sbattuto! Fai /snake per rigiocare")
+            del games[chat_id]
+            return
+        # check corpo
+        if new_head in game["snake"]:
+            await query.edit_message_text("💥 Game Over! Ti sei morso! Fai /snake per rigiocare")
+            del games[chat_id]
+            return
 
-async def start_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global ai_bloccata
-    user = update.effective_user.username
-    if user != ADMIN_USERNAME:
-        await update.message.reply_text("⛔ Solo @hadner può sbloccare l'AI!")
+        game["snake"] = [new_head] + game["snake"]
+        if new_head == game["food"]:
+            game["food"] = (random.randint(0,7), random.randint(0,7))
+        else:
+            game["snake"].pop()
+
+        keyboard = [
+            [InlineKeyboardButton("⬆️", callback_data="up")],
+            [InlineKeyboardButton("⬅️", callback_data="left"), InlineKeyboardButton("⬇️", callback_data="down"), InlineKeyboardButton("➡️", callback_data="right")]
+        ]
+        board = render_board(game["snake"], game["food"])
+        score = len(game["snake"]) - 3
+        await query.edit_message_text(f"🐍 Score: {score}\n\n{board}", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not client:
+        await update.message.reply_text("Oh ciccio manca la chiave Groq su Render!")
         return
-    ai_bloccata = False
-    await update.message.reply_text("🟢 AI SBLOCCATA! Nunzio è tornato!")
-
-async def snake(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🐍 Snake - usa le frecce!")
-
-async def chat_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if ai_bloccata:
-        return
+    user_text = update.message.text
     try:
-        r = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+        resp = client.chat.completions.create(
+            model="llama-3.1-8b-instant", # FIX MODELLO - questo esiste sicuro!
             messages=[
-                {"role": "system", "content": "Sei Nunzio, AI pugliese simpatico, parli italiano con accento pugliese leggero, divertente."},
-                {"role": "user", "content": update.message.text}
-            ]
+                {"role": "system", "content": "Sei Nunzio, un bot pugliese simpatico, verace, parli in dialetto barese/pugliese leggero, divertente, amichevole. Rispondi sempre in italiano con accento pugliese."},
+                {"role": "user", "content": user_text}
+            ],
+            max_tokens=300
         )
-        await update.message.reply_text(r.choices[0].message.content)
+        await update.message.reply_text(resp.choices[0].message.content)
     except Exception as e:
-        await update.message.reply_text(f"Errore: {e}")
+        await update.message.reply_text(f"Ueh ho un problemino: {e}")
 
-# --- AVVIO BOT ---
-telegram_app = Application.builder().token(TOKEN).build()
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(CommandHandler("stopai", stop_ai))
-telegram_app.add_handler(CommandHandler("startai", start_ai))
-telegram_app.add_handler(CommandHandler("snake", snake))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_ai))
+def run_bot():
+    bot_app = ApplicationBuilder().token(BOT_TOKEN).build()
+    bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(CommandHandler("snake", snake_cmd))
+    bot_app.add_handler(CallbackQueryHandler(move_callback))
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
+    print("Bot Telegram partito...")
+    bot_app.run_polling()
 
-print("Bot avviato...")
-telegram_app.run_polling()
+if __name__ == "__main__":
+    # Fai partire il bot in un thread separato così Flask non lo blocca!
+    threading.Thread(target=run_bot, daemon=True).start()
+    # Flask per tenere Render Live
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
