@@ -1,4 +1,4 @@
-import os, threading, random, time, re
+import os, threading, random, time, re, math
 import urllib.request
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -10,7 +10,7 @@ GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Nunzio V7 CERVELLONE"
+def home(): return "Nunzio V8 CERVELLONE √ FIX"
 
 games = {}
 
@@ -58,7 +58,7 @@ def render_tetris(g):
     return out
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Nunzio V7 🧠 CERVELLONE!\n/snake /pacman /tetris\nE poi chiedimi tabelline, conti, compiti!")
+    await update.message.reply_text("Nunzio V8 🧠 CERVELLONE!\n/snake /pacman /tetris\nE poi chiedimi tabelline, conti, radici!")
 
 async def snake_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id=update.effective_chat.id
@@ -147,52 +147,75 @@ async def move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb=[[InlineKeyboardButton("🔄 Ruota",callback_data="tet_rot"),InlineKeyboardButton("⬇️ Giù",callback_data="tet_down")],[InlineKeyboardButton("⬅️",callback_data="tet_left"),InlineKeyboardButton("➡️",callback_data="tet_right")]]
         await q.edit_message_text(f"🧱 TETRIS Score:{g['score']}\n{render_tetris(g)}",reply_markup=InlineKeyboardMarkup(kb))
 
-# === CHAT CERVELLONE FIX ===
+# === CHAT CERVELLONE V8 - FIX RADICE ===
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    # 1. Se è un conto matematico, fallo da solo - 100% sicuro!
-    math_match = re.search(r'(\d+\s*[\+\-\*\/xX]\s*\d+)', text.replace('=', ''))
-    if math_match or any(c in text for c in ['+', '*', 'x']) and any(ch.isdigit() for ch in text):
-        try:
-            expr = text.replace('=', '').replace('x','*').replace('X','*').replace('×','*').replace('÷','/').strip()
-            # prendi solo numeri e operatori
+
+    # 1. RADICE QUADRATA e CONTI - GESTIONE SPECIALE
+    try:
+        t = text.replace('=', '').strip()
+        
+        # Caso √25
+        m = re.search(r'√\s*(\d+(\.\d+)?)', t)
+        if m:
+            num = float(m.group(1))
+            res = math.sqrt(num)
+            if res.is_integer(): res = int(res)
+            await update.message.reply_text(f"🧠 √{m.group(1)} = {res} ✅")
+            return
+
+        # Caso sqrt25 o sqrt(25)
+        m2 = re.search(r'sqrt\s*\(?\s*(\d+(\.\d+)?)\s*\)?', t.lower())
+        if m2:
+            num = float(m2.group(1))
+            res = math.sqrt(num)
+            if res.is_integer(): res = int(res)
+            await update.message.reply_text(f"🧠 √{m2.group(1)} = {res} ✅")
+            return
+
+        # Conti normali + - * / 
+        if any(c in t for c in ['+', '-', '*', '/', 'x', '×', '÷']) or re.search(r'\d+\s*[+\-*/]\s*\d+', t):
+            expr = t.replace('x','*').replace('X','*').replace('×','*').replace('÷','/').replace('^','**')
             clean = re.sub(r'[^0-9\+\-\*\/\(\)\.\s]', '', expr)
-            if clean:
-                result = eval(clean)
-                await update.message.reply_text(f"🧠 {text} = {result} ✅\nBravo! Vuoi un'altra tabellina?")
+            if clean and len(clean) < 30:
+                result = eval(clean, {"__builtins__": {}}, {})
+                if isinstance(result, float) and result.is_integer():
+                    result = int(result)
+                # evita 5.0
+                await update.message.reply_text(f"🧠 {text} = {result} ✅")
                 return
-        except: pass
+    except Exception as e:
+        print(f"Math error V8: {e}")
+        pass
     
-    # 2. Se chiede tabelline
+    # 2. Tabelline
     if "tabell" in text.lower():
-        tab = "📚 TABELLINA DEL 3:\n"
-        for i in range(1,11): tab+=f"{3} x {i} = {3*i}\n"
-        tab+="\nQuale altra vuoi? Dimmi 4, 5, 6..."
+        num_match = re.search(r'\d+', text)
+        n = int(num_match.group()) if num_match else 3
+        if n > 100: n = 3
+        tab = f"📚 TABELLINA DEL {n}:\n"
+        for i in range(1,11): tab+=f"{n} x {i} = {n*i}\n"
         await update.message.reply_text(tab)
         return
 
-    # 3. Altrimenti chiedi a Groq con FIX anti-messaggio vuoto
+    # 3. Groq
     try:
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role":"system","content":"Sei Nunzio, bagnino pugliese super simpatico e bravissimo in matematica e tabelline. Rispondi sempre in italiano, breve, divertente, e se è un conto dai subito il risultato. Mai rispondere vuoto."},
+                {"role":"system","content":"Sei Nunzio, bagnino pugliese super simpatico e bravissimo in matematica. Rispondi sempre in italiano, breve e divertente. Mai vuoto."},
                 {"role":"user","content": text}
             ],
             max_tokens=500,
             temperature=0.7
         )
         content = resp.choices[0].message.content
-        # FIX: se Groq risponde vuoto, non mandare messaggio vuoto!
         if not content or not content.strip():
-            content = f"🤔 Non ho capito '{text}' ma so che 2+23=25 e 3*2=6! Riprova!"
-        
+            content = "Eh, non ho capito! Prova con √25= o 10/2= 😎"
         await update.message.reply_text(content.strip()[:4000])
-
     except Exception as e:
         print(f"Errore Groq: {e}")
-        # Fallback finale - mai dare errore vuoto
-        await update.message.reply_text(f"Ops scusa, ho avuto un attimo di confusione! Ma so fare i conti: 2+23=25 e 3*2=6 😎 Riprova!")
+        await update.message.reply_text("Ops confusione! Ma so che √25=5 e 10/2=5 😎 Riprova!")
 
 def run_flask():
     app.run(host="0.0.0.0",port=int(os.environ.get("PORT",10000)))
@@ -200,7 +223,7 @@ def run_flask():
 if __name__=="__main__":
     threading.Thread(target=run_flask,daemon=True).start()
     threading.Thread(target=anti_sleep,daemon=True).start()
-    print("Bot V7 CERVELLONE partito!")
+    print("Bot V8 FIX partito!")
     b=ApplicationBuilder().token(BOT_TOKEN).build()
     b.add_handler(CommandHandler("start",start))
     b.add_handler(CommandHandler("snake",snake_cmd))
