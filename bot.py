@@ -86,7 +86,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     try:
         resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-20b",
             messages=[
                 {"role": "system", "content": "Sei Nunzio, un bot pugliese simpatico, verace, parli in dialetto barese/pugliese leggero, divertente."},
                 {"role": "user", "content": update.message.text}
@@ -106,7 +106,6 @@ if __name__ == "__main__":
         print("ERRORE FATALE: BOT_TOKEN non trovato su Render Environment!")
     else:
         print(f"BOT_TOKEN trovato: {BOT_TOKEN[:10]}...")
-    # Flask in background, NON blocca più il bot!
     threading.Thread(target=run_flask, daemon=True).start()
     print("Bot Telegram partito... - Ora rispondo su Telegram!")
     bot_app = ApplicationBuilder().token(BOT_TOKEN).build()
