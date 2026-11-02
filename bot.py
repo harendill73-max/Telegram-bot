@@ -8,11 +8,10 @@ from groq import Groq
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
-print(f"Groq key present: {bool(GROQ_KEY)}")
 
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Nunzio V10 FIX DISTRAZIONE"
+def home(): return "Nunzio V12 NATURALE FIX"
 
 games = {}
 
@@ -60,7 +59,7 @@ def render_tetris(g):
     return out
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Ciao! Sono Nunzio 😊\n/snake /pacman /tetris per giocare\nChiedimi pure tabelline, conti, radici, compiti!")
+    await update.message.reply_text("Ciao! Sono Nunzio 😊\n/snake /pacman /tetris per giocare\nChiedimi quello che vuoi!")
 
 async def snake_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id=update.effective_chat.id
@@ -149,86 +148,56 @@ async def move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb=[[InlineKeyboardButton("🔄 Ruota",callback_data="tet_rot"),InlineKeyboardButton("⬇️ Giù",callback_data="tet_down")],[InlineKeyboardButton("⬅️",callback_data="tet_left"),InlineKeyboardButton("➡️",callback_data="tet_right")]]
         await q.edit_message_text(f"🧱 TETRIS Score:{g['score']}\n{render_tetris(g)}",reply_markup=InlineKeyboardMarkup(kb))
 
-# === CHAT V10 FIX DISTRAZIONE ===
+def offline_reply(text):
+    t=text.lower()
+    if t in ["ciao","ciao!","ehi","salve"]: return "Ciao! 😊 Come va?"
+    if "come stai" in t: return "Bene grazie! E tu? 😊"
+    if "silvana" in t: return "Silvana? Che mi dici di Silvana? 😊"
+    if "chi sei" in t: return "Sono Nunzio, piacere! 😊"
+    return random.choice(["Dimmi pure! 😊", "Ti ascolto! 😊", "E quindi? 😊"])
+
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    # 1. CONTI E RADICI
     try:
         t = text.replace('=', '').strip()
         m = re.search(r'√\s*(\d+(\.\d+)?)', t)
         if m:
-            num = float(m.group(1))
-            res = math.sqrt(num)
-            if res.is_integer(): res = int(res)
-            await update.message.reply_text(f"🧠 √{m.group(1)} = {res} ✅")
-            return
-        m2 = re.search(r'sqrt\s*\(?\s*(\d+(\.\d+)?)\s*\)?', t.lower())
-        if m2:
-            num = float(m2.group(1))
-            res = math.sqrt(num)
-            if res.is_integer(): res = int(res)
-            await update.message.reply_text(f"🧠 √{m2.group(1)} = {res} ✅")
-            return
-        if any(c in t for c in ['+', '-', '*', '/', 'x', '×', '÷']) or re.search(r'\d+\s*[+\-*/]\s*\d+', t):
-            expr = t.replace('x','*').replace('X','*').replace('×','*').replace('÷','/').replace('^','**')
-            clean = re.sub(r'[^0-9\+\-\*\/\(\)\.\s]', '', expr)
-            if clean and len(clean) < 30:
-                result = eval(clean, {"__builtins__": {}}, {})
-                if isinstance(result, float) and result.is_integer(): result = int(result)
-                await update.message.reply_text(f"🧠 {text} = {result} ✅")
-                return
+            num=float(m.group(1)); res=math.sqrt(num)
+            if res.is_integer(): res=int(res)
+            await update.message.reply_text(f"🧠 √{m.group(1)} = {res} ✅"); return
+        if any(c in t for c in ['+','-','*','/','x','×','÷']) and re.search(r'\d',t):
+            expr=t.replace('x','*').replace('X','*').replace('×','*').replace('÷','/').replace('^','**')
+            clean=re.sub(r'[^0-9\+\-\*\/\(\)\.\s]', '', expr)
+            if clean and len(clean)<30:
+                result=eval(clean, {"__builtins__": {}}, {})
+                if isinstance(result,float) and result.is_integer(): result=int(result)
+                await update.message.reply_text(f"🧠 {text} = {result} ✅"); return
     except: pass
-    
     if "tabell" in text.lower():
-        num_match = re.search(r'\d+', text)
-        n = int(num_match.group()) if num_match else 3
-        if n > 100: n = 3
-        tab = f"📚 Tabellina del {n}:\n"
+        mm=re.search(r'\d+',text); n=int(mm.group()) if mm else 3
+        tab=f"📚 Tabellina del {n}:\n"
         for i in range(1,11): tab+=f"{n} x {i} = {n*i}\n"
-        await update.message.reply_text(tab)
-        return
+        await update.message.reply_text(tab); return
 
-    # 2. CHAT CON GROQ - FIX VERO
-    if not client:
-        # Se Groq non c'è, rispondi naturale senza dire "distratto"
-        risposte = [
-            f"Ah, {text} 😊 Dimmi di più!",
-            f"Capito! Su {text} che vuoi sapere?",
-            f"{text}? Interessante! Racconta 😊",
-        ]
-        await update.message.reply_text(random.choice(risposte))
-        return
+    if client:
+        try:
+            resp=client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {"role":"system","content":"Sei Nunzio, un amico simpatico che parla in italiano naturale, breve e amichevole. Rispondi sempre. Non usare dialetto pesante. Se ti chiedono cosa sei, di che sei Nunzio, un amico del gruppo."},
+                    {"role":"user","content": text}
+                ],
+                max_tokens=300,
+                temperature=0.7
+            )
+            content=resp.choices[0].message.content
+            if content and content.strip():
+                await update.message.reply_text(content.strip()[:2000])
+                return
+        except Exception as e:
+            print(f"Groq error: {e}")
 
-    try:
-        resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {"role":"system","content":"Sei Nunzio, un ragazzo simpatico, naturale e alla mano. Parli in italiano normale, semplice. Non dire mai che sei un bot, AI, modello. Sei solo Nunzio, un amico che aiuta con compiti e chiacchiere. Risposte brevi, naturali, amichevoli. Se ti dicono 'Silvana e mia figlia' rispondi in modo naturale, tipo chiedi qualcosa o fai un complimento, non dire che sei distratto."},
-                {"role":"user","content": text}
-            ],
-            max_tokens=400,
-            temperature=0.8
-        )
-        content = resp.choices[0].message.content
-        if not content or not content.strip():
-            raise ValueError("Groq empty response")
-        await update.message.reply_text(content.strip()[:4000])
-        
-    except Exception as e:
-        print(f"ERRORE GROQ V10: {e}")
-        # FALLBACK NATURALE - NON DIRE PIU' "DISTRAZIONE"
-        if "silvana" in text.lower() and "figlia" in text.lower():
-            await update.message.reply_text("Silvana e tua figlia? Che bello! 😊 Come stanno?")
-        elif "distratto" in text.lower():
-            await update.message.reply_text("No no, ci sono! 😊 Dicevi?")
-        else:
-            fallback = [
-                f"Ah, {text}... interessante! Dimmi di più 😊",
-                f"Ho capito! E quindi?",
-                "Ci sono, ti ascolto! 😊",
-                f"Su {text} cosa vuoi sapere di preciso?"
-            ]
-            await update.message.reply_text(random.choice(fallback))
+    await update.message.reply_text(offline_reply(text))
 
 def run_flask():
     app.run(host="0.0.0.0",port=int(os.environ.get("PORT",10000)))
@@ -236,7 +205,7 @@ def run_flask():
 if __name__=="__main__":
     threading.Thread(target=run_flask,daemon=True).start()
     threading.Thread(target=anti_sleep,daemon=True).start()
-    print("Bot V10 FIX partito!")
+    print("Bot V12 partito!")
     b=ApplicationBuilder().token(BOT_TOKEN).build()
     b.add_handler(CommandHandler("start",start))
     b.add_handler(CommandHandler("snake",snake_cmd))
