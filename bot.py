@@ -10,7 +10,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Ciao! Sono Nunzio_bot 🤖\nScrivi qualcosa o /snake")
 
 async def snake(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🐍 Snake ok!")
+    await update.message.reply_text("🐍 Snake - freccine!")
 
 async def chat_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -29,5 +29,4 @@ app = Application.builder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("snake", snake))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_ai))
-print("Bot avviato...")
 app.run_polling()
