@@ -10,7 +10,7 @@ GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Nunzio V8 CERVELLONE √ FIX"
+def home(): return "Nunzio V9 NATURALE"
 
 games = {}
 
@@ -58,7 +58,7 @@ def render_tetris(g):
     return out
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Nunzio V8 🧠 CERVELLONE!\n/snake /pacman /tetris\nE poi chiedimi tabelline, conti, radici!")
+    await update.message.reply_text("Ciao! Sono Nunzio 😊\n/snake /pacman /tetris per giocare\nChiedimi pure tabelline, conti, radici, compiti!")
 
 async def snake_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id=update.effective_chat.id
@@ -147,15 +147,13 @@ async def move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb=[[InlineKeyboardButton("🔄 Ruota",callback_data="tet_rot"),InlineKeyboardButton("⬇️ Giù",callback_data="tet_down")],[InlineKeyboardButton("⬅️",callback_data="tet_left"),InlineKeyboardButton("➡️",callback_data="tet_right")]]
         await q.edit_message_text(f"🧱 TETRIS Score:{g['score']}\n{render_tetris(g)}",reply_markup=InlineKeyboardMarkup(kb))
 
-# === CHAT CERVELLONE V8 - FIX RADICE ===
+# === CHAT NATURALE - NON DICE BOT ===
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
-    # 1. RADICE QUADRATA e CONTI - GESTIONE SPECIALE
+    # 1. RADICE E CONTI
     try:
         t = text.replace('=', '').strip()
-        
-        # Caso √25
         m = re.search(r'√\s*(\d+(\.\d+)?)', t)
         if m:
             num = float(m.group(1))
@@ -163,8 +161,6 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if res.is_integer(): res = int(res)
             await update.message.reply_text(f"🧠 √{m.group(1)} = {res} ✅")
             return
-
-        # Caso sqrt25 o sqrt(25)
         m2 = re.search(r'sqrt\s*\(?\s*(\d+(\.\d+)?)\s*\)?', t.lower())
         if m2:
             num = float(m2.group(1))
@@ -172,8 +168,6 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if res.is_integer(): res = int(res)
             await update.message.reply_text(f"🧠 √{m2.group(1)} = {res} ✅")
             return
-
-        # Conti normali + - * / 
         if any(c in t for c in ['+', '-', '*', '/', 'x', '×', '÷']) or re.search(r'\d+\s*[+\-*/]\s*\d+', t):
             expr = t.replace('x','*').replace('X','*').replace('×','*').replace('÷','/').replace('^','**')
             clean = re.sub(r'[^0-9\+\-\*\/\(\)\.\s]', '', expr)
@@ -181,41 +175,37 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result = eval(clean, {"__builtins__": {}}, {})
                 if isinstance(result, float) and result.is_integer():
                     result = int(result)
-                # evita 5.0
                 await update.message.reply_text(f"🧠 {text} = {result} ✅")
                 return
-    except Exception as e:
-        print(f"Math error V8: {e}")
-        pass
+    except: pass
     
-    # 2. Tabelline
     if "tabell" in text.lower():
         num_match = re.search(r'\d+', text)
         n = int(num_match.group()) if num_match else 3
         if n > 100: n = 3
-        tab = f"📚 TABELLINA DEL {n}:\n"
+        tab = f"📚 Tabellina del {n}:\n"
         for i in range(1,11): tab+=f"{n} x {i} = {n*i}\n"
         await update.message.reply_text(tab)
         return
 
-    # 3. Groq
+    # 2. CHAT NATURALE
     try:
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role":"system","content":"Sei Nunzio, bagnino pugliese super simpatico e bravissimo in matematica. Rispondi sempre in italiano, breve e divertente. Mai vuoto."},
+                {"role":"system","content":"Sei Nunzio, un ragazzo simpatico, naturale e alla mano. Parli in italiano normale, semplice e spontaneo, senza dialetto pugliese marcato. Non dire mai che sei un bot, un'intelligenza artificiale, un modello o un assistente virtuale. Sei solo Nunzio, un amico che aiuta con i compiti, le tabelline e fa due chiacchiere. Risposte brevi, naturali, amichevoli. Se non sai qualcosa, dillo in modo naturale."},
                 {"role":"user","content": text}
             ],
             max_tokens=500,
-            temperature=0.7
+            temperature=0.8
         )
         content = resp.choices[0].message.content
         if not content or not content.strip():
-            content = "Eh, non ho capito! Prova con √25= o 10/2= 😎"
+            content = "Non ho capito bene, me lo ridici? 😊"
         await update.message.reply_text(content.strip()[:4000])
     except Exception as e:
         print(f"Errore Groq: {e}")
-        await update.message.reply_text("Ops confusione! Ma so che √25=5 e 10/2=5 😎 Riprova!")
+        await update.message.reply_text("Ops, mi sono distratto un attimo! Riproviamo? 😊")
 
 def run_flask():
     app.run(host="0.0.0.0",port=int(os.environ.get("PORT",10000)))
@@ -223,7 +213,7 @@ def run_flask():
 if __name__=="__main__":
     threading.Thread(target=run_flask,daemon=True).start()
     threading.Thread(target=anti_sleep,daemon=True).start()
-    print("Bot V8 FIX partito!")
+    print("Bot V9 NATURALE partito!")
     b=ApplicationBuilder().token(BOT_TOKEN).build()
     b.add_handler(CommandHandler("start",start))
     b.add_handler(CommandHandler("snake",snake_cmd))
