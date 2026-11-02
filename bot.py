@@ -8,9 +8,11 @@ from groq import Groq
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+print(f"Groq key present: {bool(GROQ_KEY)}")
+
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Nunzio V9 NATURALE"
+def home(): return "Nunzio V10 FIX DISTRAZIONE"
 
 games = {}
 
@@ -147,11 +149,10 @@ async def move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb=[[InlineKeyboardButton("🔄 Ruota",callback_data="tet_rot"),InlineKeyboardButton("⬇️ Giù",callback_data="tet_down")],[InlineKeyboardButton("⬅️",callback_data="tet_left"),InlineKeyboardButton("➡️",callback_data="tet_right")]]
         await q.edit_message_text(f"🧱 TETRIS Score:{g['score']}\n{render_tetris(g)}",reply_markup=InlineKeyboardMarkup(kb))
 
-# === CHAT NATURALE - NON DICE BOT ===
+# === CHAT V10 FIX DISTRAZIONE ===
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-
-    # 1. RADICE E CONTI
+    # 1. CONTI E RADICI
     try:
         t = text.replace('=', '').strip()
         m = re.search(r'√\s*(\d+(\.\d+)?)', t)
@@ -173,8 +174,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             clean = re.sub(r'[^0-9\+\-\*\/\(\)\.\s]', '', expr)
             if clean and len(clean) < 30:
                 result = eval(clean, {"__builtins__": {}}, {})
-                if isinstance(result, float) and result.is_integer():
-                    result = int(result)
+                if isinstance(result, float) and result.is_integer(): result = int(result)
                 await update.message.reply_text(f"🧠 {text} = {result} ✅")
                 return
     except: pass
@@ -188,24 +188,47 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(tab)
         return
 
-    # 2. CHAT NATURALE
+    # 2. CHAT CON GROQ - FIX VERO
+    if not client:
+        # Se Groq non c'è, rispondi naturale senza dire "distratto"
+        risposte = [
+            f"Ah, {text} 😊 Dimmi di più!",
+            f"Capito! Su {text} che vuoi sapere?",
+            f"{text}? Interessante! Racconta 😊",
+        ]
+        await update.message.reply_text(random.choice(risposte))
+        return
+
     try:
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
-                {"role":"system","content":"Sei Nunzio, un ragazzo simpatico, naturale e alla mano. Parli in italiano normale, semplice e spontaneo, senza dialetto pugliese marcato. Non dire mai che sei un bot, un'intelligenza artificiale, un modello o un assistente virtuale. Sei solo Nunzio, un amico che aiuta con i compiti, le tabelline e fa due chiacchiere. Risposte brevi, naturali, amichevoli. Se non sai qualcosa, dillo in modo naturale."},
+                {"role":"system","content":"Sei Nunzio, un ragazzo simpatico, naturale e alla mano. Parli in italiano normale, semplice. Non dire mai che sei un bot, AI, modello. Sei solo Nunzio, un amico che aiuta con compiti e chiacchiere. Risposte brevi, naturali, amichevoli. Se ti dicono 'Silvana e mia figlia' rispondi in modo naturale, tipo chiedi qualcosa o fai un complimento, non dire che sei distratto."},
                 {"role":"user","content": text}
             ],
-            max_tokens=500,
+            max_tokens=400,
             temperature=0.8
         )
         content = resp.choices[0].message.content
         if not content or not content.strip():
-            content = "Non ho capito bene, me lo ridici? 😊"
+            raise ValueError("Groq empty response")
         await update.message.reply_text(content.strip()[:4000])
+        
     except Exception as e:
-        print(f"Errore Groq: {e}")
-        await update.message.reply_text("Ops, mi sono distratto un attimo! Riproviamo? 😊")
+        print(f"ERRORE GROQ V10: {e}")
+        # FALLBACK NATURALE - NON DIRE PIU' "DISTRAZIONE"
+        if "silvana" in text.lower() and "figlia" in text.lower():
+            await update.message.reply_text("Silvana e tua figlia? Che bello! 😊 Come stanno?")
+        elif "distratto" in text.lower():
+            await update.message.reply_text("No no, ci sono! 😊 Dicevi?")
+        else:
+            fallback = [
+                f"Ah, {text}... interessante! Dimmi di più 😊",
+                f"Ho capito! E quindi?",
+                "Ci sono, ti ascolto! 😊",
+                f"Su {text} cosa vuoi sapere di preciso?"
+            ]
+            await update.message.reply_text(random.choice(fallback))
 
 def run_flask():
     app.run(host="0.0.0.0",port=int(os.environ.get("PORT",10000)))
@@ -213,7 +236,7 @@ def run_flask():
 if __name__=="__main__":
     threading.Thread(target=run_flask,daemon=True).start()
     threading.Thread(target=anti_sleep,daemon=True).start()
-    print("Bot V9 NATURALE partito!")
+    print("Bot V10 FIX partito!")
     b=ApplicationBuilder().token(BOT_TOKEN).build()
     b.add_handler(CommandHandler("start",start))
     b.add_handler(CommandHandler("snake",snake_cmd))
