@@ -6,36 +6,41 @@ from groq import Groq
 TOKEN = os.getenv("BOT_TOKEN")
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# False = AI accesa, True = AI bloccata (leggi tu)
+ADMIN_USERNAME = "hadner"  # solo tu puoi bloccare l'AI
 ai_bloccata = False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Ciao! Sono Nunzio_bot 🤖\n/startai per attivare AI\n/stopai per bloccare AI e leggere tu")
+    await update.message.reply_text("Ciao! Sono Nunzio_bot 🤖\nSei su @Nunzio bot pugliese!")
 
 async def stop_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global ai_bloccata
+    user = update.effective_user.username
+    if user != ADMIN_USERNAME:
+        await update.message.reply_text("⛔ Solo @hadner può bloccare l'AI!")
+        return
     ai_bloccata = True
-    await update.message.reply_text("🔴 AI BLOCCATA!\nOra leggo solo io, non risponde più Nunzio.\nTu puoi leggere e rispondere a mano su Telegram.\nScrivi /startai per sbloccare.")
+    await update.message.reply_text("🔴 AI BLOCCATA da @hadner!\nOra Nunzio non risponde. Tu leggi i messaggi e rispondi tu a mano.\nScrivi /startai per sbloccare.")
 
 async def start_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global ai_bloccata
+    user = update.effective_user.username
+    if user != ADMIN_USERNAME:
+        await update.message.reply_text("⛔ Solo @hadner può sbloccare l'AI!")
+        return
     ai_bloccata = False
-    await update.message.reply_text("🟢 AI SBLOCCATA!\nOra Nunzio risponde di nuovo da solo!")
+    await update.message.reply_text("🟢 AI SBLOCCATA! Nunzio è tornato!")
 
 async def snake(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🐍 Snake ok!")
+    await update.message.reply_text("🐍 Snake - usa le frecce!")
 
 async def chat_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global ai_bloccata
-    # SE AI BLOCCATA, NON RISPONDE
     if ai_bloccata:
-        return  # tu leggi il messaggio su Telegram e rispondi tu a mano
-
+        return # AI bloccata, tu leggi e rispondi a mano
     try:
         r = client.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
-                {"role": "system", "content": "Sei Nunzio, AI pugliese simpatico, parli italiano."},
+                {"role": "system", "content": "Sei Nunzio, AI pugliese simpatico, parli italiano con accento pugliese leggero, divertente."},
                 {"role": "user", "content": update.message.text}
             ]
         )
